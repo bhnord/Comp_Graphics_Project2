@@ -48,22 +48,17 @@ let program;
 let is_mesh = true;
 
 let chaikins_subdivide = 0;
+
+
 function triangle(a, b, c) {
-
-
-
     pointsArray.push(a);
     pointsArray.push(b);
     pointsArray.push(c);
 
     // normals are vectors
-
     normalsArray.push(a[0], a[1], a[2], 0.0);
     normalsArray.push(b[0], b[1], b[2], 0.0);
     normalsArray.push(c[0], c[1], c[2], 0.0);
-
-
-
 }
 
 
@@ -112,9 +107,9 @@ window.onload = function init() {
 
 
 
-    //
+
     //  Load shaders and initialize attribute buffers
-    //
+
     program = initShaders(gl, "vertex-shader", "fragment-shader");
     gl.useProgram(program);
 
@@ -140,7 +135,7 @@ window.onload = function init() {
     let vNormalPosition = gl.getAttribLocation(program, "vNormal");
     gl.vertexAttribPointer(vNormalPosition, 4, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(vNormalPosition);
-    ////
+
 
     //setup progarm matrix locations
     modelViewMatrixLoc = gl.getUniformLocation(program, "modelViewMatrix");
@@ -159,9 +154,8 @@ window.onload = function init() {
     gl.uniform1i(gl.getUniformLocation(program, "drawWhite"), 1);
     gl.uniform1i(gl.getUniformLocation(program, "isLineDraw"), 1);
 
-
     draw_type = gl.LINE_LOOP;
-
+    point_change = (Math.pow(2, chaikins_subdivide + 1) - 1)/20;
 
     //set up key presses
     keys_setup(program);
@@ -172,6 +166,10 @@ window.onload = function init() {
 let transMatrix;
 let point_num = 0;
 let id;
+
+let point_change = 0;
+let last_chaikins =0;
+let curr_location =0;
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -199,15 +197,42 @@ function render() {
     }
 
 
-    //for animation, move sphere along points array 
-    point_num = (point_num + 1) % pointsArray.length;
-    transMatrix = translate(pointsArray[point_num][0], pointsArray[point_num][1], 0);
+
+
+    //TODO CALCULATE BETWEEN VERTICIES -- 40tics?
+
+    if (chaikins_subdivide != last_chaikins) {
+        // num points (float) to have 1/(7*20) piece of line (20 is arbitrary, refers to speed of sphere along curve)
+        point_change = (Math.pow(2, chaikins_subdivide + 1) - 1)/20; 
+
+        //reset deltas because of vector array change -- sphere will jump to nearest point. 
+        deltax = 0;
+        deltay = 0;
+    }
+    last_chaikins = chaikins_subdivide;
+
+
+
+ 
+    curr_location = (curr_location+point_change) % pointsArray.length;
+   
+
+    //takes integer of curr_location for point reference on curve
+
+    point_num = (parseInt(curr_location)) % pointsArray.length;
+
+    //takes fractional of curr_location for amount (deltaxy) inbetweeen points to translate
+    let deltax = (pointsArray[(point_num+1)%pointsArray.length][0] - pointsArray[point_num][0]) * (curr_location%1);
+    console.log(deltax);
+    let deltay = (pointsArray[(point_num+1)%pointsArray.length][1] - pointsArray[point_num][1]) * (curr_location%1);
+    
+    transMatrix = translate(pointsArray[point_num][0] + deltax, pointsArray[point_num][1] +deltay, 0);
+
 
     gl.uniformMatrix4fv(transMatrixLoc, false, flatten(transMatrix));
 
     //turn isCircle back to 1 to draw circle (no translation matrix)
     gl.uniform1i(gl.getUniformLocation(program, "isCircle"), 1);
-
 
 
     //setup circle buffers before arrays draw call
