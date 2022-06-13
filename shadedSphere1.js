@@ -36,13 +36,22 @@ let materialDiffuse = vec4(1.0, 0.8, 0.0, 1.0);
 let materialSpecular = vec4(1.0, 1.0, 1.0, 1.0);
 let materialShininess = 20.0;
 
-let modelViewMatrix, projectionMatrix;
+
+
+let at = vec3(0.0, 0.0, 1.0);
+let up = vec3(0.0, 1.0, 0.0);
+
 let modelViewMatrixLoc, projectionMatrixLoc;
 
 let transMatrixLoc;
-let eye;
-let at = vec3(0.0, 0.0, 1.0);
-let up = vec3(0.0, 1.0, 0.0);
+let eye = vec3(0, 0, Z_DISTANCE);
+
+//sets camera to look at scene
+let modelViewMatrix = lookAt(eye, at, up);
+//sets up projection view
+let fovy = 30;
+let projectionMatrix = perspective(fovy, 1,.1, 100);
+
 
 let draw_type;
 let vBuffer;
@@ -53,7 +62,9 @@ let is_mesh = true;
 
 let chaikins_subdivide = 0;
 
+let lightingType = 0;
 
+//add trianngle to point array
 function triangle(a, b, c) {
     pointsArray.push(a);
     pointsArray.push(b);
@@ -65,7 +76,7 @@ function triangle(a, b, c) {
     normalsArray.push(c[0], c[1], c[2], 0.0);
 }
 
-
+//subdivide on triangles
 function divideTriangle(a, b, c, count) {
     if (count > 0) {
 
@@ -87,7 +98,7 @@ function divideTriangle(a, b, c, count) {
     }
 }
 
-
+//create tetrahedron by subdividing on triangles
 function tetrahedron(a, b, c, d, n) {
     divideTriangle(a, b, c, n);
     divideTriangle(d, c, b, n);
@@ -123,6 +134,7 @@ window.onload = function init() {
 
 
 
+    //buffer creations and vertex array initialization
     vBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, flatten(pointsArray), gl.STATIC_DRAW);
@@ -164,51 +176,40 @@ window.onload = function init() {
     //set up key presses
     keys_setup(program);
 
+    //first render
     render();
 }
 
-let transMatrix;
-let point_num = 0;
-let id;
 
-let point_change = 0;
-let last_chaikins = 0;
-let curr_location = 0;
-let is_animated = false;
+let point_num = 0; //num point sphere is at
+let point_change = 0; //change in point (float) per render
+let last_chaikins = 0; //amt of chaikins subdv on last render
+let curr_location = 0; //total location in float where sphere is at (point + fraction to next point)
+let is_animated = false; //animation toggle
 
-let [deltax, deltay] = [0, 0];
+let [deltax, deltay] = [0, 0]; //change in xy of sphere from a point along the curve
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    eye = vec3(0, 0, Z_DISTANCE);
 
-    //sets camera to look at scene
-    modelViewMatrix = lookAt(eye, at, up);
-    //sets up projection view
-    let fovy = 30;
-    projectionMatrix = perspective(fovy, 1,.1, 100);
 
     //set up model and projection matrix
     gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(modelViewMatrix));
     gl.uniformMatrix4fv(projectionMatrixLoc, false, flatten(projectionMatrix));
 
 
-    //if not circle, make isCircle 0
+    //do not translate (not a circle drawing -- draw in white with no shading
     gl.uniform1i(gl.getUniformLocation(program, "isCircle"), 0);
     gl.uniform1i(gl.getUniformLocation(program, "drawWhite"), 1);
     draw_line();
 
     gl.drawArrays(gl.LINE_LOOP, 0, pointsArray.length);
 
-    if (!is_mesh) {
+    if (!is_mesh) { //if not in wireframe mode, draw shading
         gl.uniform1i(gl.getUniformLocation(program, "drawWhite"), 0);
     }
 
-
-
-
-
-    if (is_animated) {
+    if (is_animated || chaikins_subdivide != last_chaikins) {
         if (chaikins_subdivide != last_chaikins) {
             // num points (float) to have 1/(7*DIVISIONS) piece of line (DIVISIONS, refers to speed of sphere along curve)
             point_change = (Math.pow(2, chaikins_subdivide + 1) - 1) / DIVISIONS;
@@ -220,11 +221,7 @@ function render() {
         }
         last_chaikins = chaikins_subdivide;
 
-
-
-
         curr_location = (curr_location + point_change) % pointsArray.length;
-
 
         //takes integer of curr_location for point reference on curve
         point_num = (Math.floor(curr_location)) % pointsArray.length;
@@ -234,21 +231,20 @@ function render() {
         deltay = (pointsArray[(point_num + 1) % pointsArray.length][1] - pointsArray[point_num][1]) * (curr_location % 1);
     }
 
-    transMatrix = translate(pointsArray[point_num][0] + deltax, pointsArray[point_num][1] + deltay, 0);
-
+    //translation matrix of sphere so sphere travels along curve
+    let transMatrix = translate(pointsArray[point_num][0] + deltax, pointsArray[point_num][1] + deltay, 0);
 
     gl.uniformMatrix4fv(transMatrixLoc, false, flatten(transMatrix));
 
     //turn isCircle back to 1 to draw circle (no translation matrix)
     gl.uniform1i(gl.getUniformLocation(program, "isCircle"), 1);
 
-
     //setup circle buffers before arrays draw call
     draw_circle();
     for (let i = 0; i < pointsArray.length; i += 3)
         gl.drawArrays(draw_type, i, 3);
 
-
+    //console.log("ss");
     //calls reqAnimationFrame to update screen every n ms 
     if (is_animated)
         setTimeout(requestAnimationFrame, 30, render);
@@ -331,12 +327,13 @@ function chaikins(points, numSubdivisions) {
 
 }
 
+
 //setup key presses for user interface
 function keys_setup(program) {
     window.onkeypress = function (event) {
         let key = event.key;
         switch (key.toLowerCase()) {
-            case 'm':
+            case 'm': //switch btw shaded sphere and meshh
                 is_mesh = !is_mesh;
                 if (is_mesh)
                     draw_type = gl.LINE_STRIP;
@@ -344,35 +341,39 @@ function keys_setup(program) {
                     draw_type = gl.TRIANGLES;
 
                 break;
-            case 'q':
+            case 'q': //decrease sphere subdivisions
                 if (numTimesToSubdivide > 0)
                     numTimesToSubdivide -= 1;
 
                 break;
-            case 'e':
+            case 'e': //increase sphere subdivisions
                 if (numTimesToSubdivide < 8)
                     numTimesToSubdivide += 1;
 
                 break;
-            case 'i':
+            case 'i': //increase line subdivisions
                 if (chaikins_subdivide < 8)
                     chaikins_subdivide++;
-
-
                 break;
-            case 'j':
+            case 'j': //decrease line subdivisions
                 if (chaikins_subdivide > 0)
                     chaikins_subdivide--;
 
                 break;
-            case 'a':
+            case 'a': //toggle animation
                 is_animated = !is_animated;
                 if (is_animated) {
                     render();
                 }
                 break;
+            case 'l': //switch lighting type
+                lightingType = (lightingType +1)% 2;
+                gl.uniform1i(gl.getUniformLocation(program, "lightingType"), lightingType);
+                break;
 
         }
+        
+        //if not animated, render once so any changes go through
         if (!is_animated)
             render();
     }

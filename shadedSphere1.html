@@ -2,6 +2,8 @@
 <html>
 
 <script id="vertex-shader" type="x-shader/x-vertex">
+    precision mediump float; 
+    precision highp int; 
 
     // assume both position and normal are in homogeneous form 
     attribute vec4 vPosition; 
@@ -12,8 +14,16 @@
 
     uniform mat4 transMatrix;
     uniform int isCircle;
-    varying vec3 L, N, V; 
     
+    uniform int lightingType;
+
+    varying vec3 L, N, V; 
+
+    uniform vec4 ambientProduct, diffuseProduct, specularProduct; 
+    uniform float shininess; 
+    uniform int drawWhite; 
+    
+    varying vec4 fColor;
     void main()
     { 
         if(isCircle ==1){
@@ -23,14 +33,21 @@
             N = normalize(modelViewMatrix * vNormal).xyz; 
             V = normalize(-pos); 
 
+            if(lightingType == 1){
+                 //gouraud shading
+                 vec3 R = (2.0 * dot(L, N) * N) - L; 
+                 vec4 diffuse = diffuseProduct * dot(L, N); 
+                 vec4 ambient = ambientProduct; 
+                 vec4 specular = specularProduct * pow(max(dot(V, R), 0.0), shininess); 
+                 fColor = diffuse + specular + ambient; 
+                 fColor.a = 1.0; 
+            }
             //include translation if drawing circle
             gl_Position = projectionMatrix * modelViewMatrix * transMatrix * vPosition; 
         } else {
             //draw line path -- no translation 
             gl_Position = projectionMatrix * modelViewMatrix * vPosition;
         }
-
-        //fColor = vec4( 1.0, 0.0, 1.0,1.0 ); 
     }
 
 </script>
@@ -38,19 +55,35 @@
 <script id="fragment-shader" type="x-shader/x-fragment">
 
     precision mediump float; 
+    precision highp int; 
     varying vec3 L, N, V; 
     uniform vec4 ambientProduct, diffuseProduct, specularProduct; 
     uniform float shininess; 
     uniform int drawWhite; 
+    uniform int lightingType;
+
+    varying vec4 fColor;
+
     void main() { 
         if(drawWhite==0){
-            vec3 R = (2.0 * dot(L, N) * N) - L; 
-            vec4 diffuse = diffuseProduct * dot(L, N); 
-            vec4 ambient = ambientProduct; 
-            vec4 specular = specularProduct * pow(max(dot(V, R), 0.0), shininess); 
-            vec4 fColor = diffuse + specular + ambient; fColor.a = 1.0; 
-            gl_FragColor = fColor; 
+            //if should be shaded
+            if(lightingType ==0){
+                //phong shading
+                vec3 R = (2.0 * dot(L, N) * N) - L; 
+                vec4 diffuse = diffuseProduct * dot(L, N); 
+                vec4 ambient = ambientProduct; 
+                vec4 specular = specularProduct * pow(max(dot(V, R), 0.0), shininess); 
+                vec4 fColor = diffuse + specular + ambient; 
+
+                fColor.a = 1.0; 
+                
+                gl_FragColor = fColor; 
+            } else {
+                //gouraud shading (already set by vector shader)
+                gl_FragColor = fColor; 
+            }
         } else {
+            //draw as white
             gl_FragColor = vec4(1, 1, 1, 1);
         }
     }
