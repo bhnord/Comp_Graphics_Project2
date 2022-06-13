@@ -1,7 +1,10 @@
+const DIVISIONS = 40;
+const Z_DISTANCE = 40.0;
+
 let canvas;
 let gl;
 
-let numTimesToSubdivide = 0;
+let numTimesToSubdivide = 2;
 
 
 
@@ -22,7 +25,8 @@ let vb = vec4(0.0, 0.942809, 0.333333, 1);
 let vc = vec4(-0.816497, -0.471405, 0.333333, 1);
 let vd = vec4(0.816497, -0.471405, 0.333333, 1);
 
-let lightPosition = vec4(1.0, 1.0, 1.0, 0.0);
+//Z distance = how far away the camera is along the Z axis from the models and 7 is so that the light looks nice
+let lightPosition = vec4(0.0, 0.0, -Z_DISTANCE+7, 0.0);
 let lightAmbient = vec4(0.2, 0.2, 0.2, 1.0);
 let lightDiffuse = vec4(1.0, 1.0, 1.0, 1.0);
 let lightSpecular = vec4(1.0, 1.0, 1.0, 1.0);
@@ -155,7 +159,7 @@ window.onload = function init() {
     gl.uniform1i(gl.getUniformLocation(program, "isLineDraw"), 1);
 
     draw_type = gl.LINE_LOOP;
-    point_change = (Math.pow(2, chaikins_subdivide + 1) - 1)/20;
+    point_change = (Math.pow(2, chaikins_subdivide + 1) - 1) / DIVISIONS;
 
     //set up key presses
     keys_setup(program);
@@ -168,17 +172,21 @@ let point_num = 0;
 let id;
 
 let point_change = 0;
-let last_chaikins =0;
-let curr_location =0;
+let last_chaikins = 0;
+let curr_location = 0;
+let is_animated = false;
+
+let [deltax, deltay] = [0, 0];
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    eye = vec3(0, 0, 1.5);
+    eye = vec3(0, 0, Z_DISTANCE);
 
     //sets camera to look at scene
     modelViewMatrix = lookAt(eye, at, up);
     //sets up projection view
-    projectionMatrix = ortho(left, right, bottom, ytop, near, far);
+    let fovy = 30;
+    projectionMatrix = perspective(fovy, 1,.1, 100);
 
     //set up model and projection matrix
     gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(modelViewMatrix));
@@ -199,34 +207,34 @@ function render() {
 
 
 
-    //TODO CALCULATE BETWEEN VERTICIES -- 40tics?
 
-    if (chaikins_subdivide != last_chaikins) {
-        // num points (float) to have 1/(7*20) piece of line (20 is arbitrary, refers to speed of sphere along curve)
-        point_change = (Math.pow(2, chaikins_subdivide + 1) - 1)/20; 
+    if (is_animated) {
+        if (chaikins_subdivide != last_chaikins) {
+            // num points (float) to have 1/(7*DIVISIONS) piece of line (DIVISIONS, refers to speed of sphere along curve)
+            point_change = (Math.pow(2, chaikins_subdivide + 1) - 1) / DIVISIONS;
 
-        //reset deltas because of vector array change -- sphere will jump to nearest point. 
-        deltax = 0;
-        deltay = 0;
+            //reset values because of vector array change -- sphere will jump to nearest point. 
+
+            point_num = point_num / Math.pow(2, last_chaikins - chaikins_subdivide);
+            curr_location = point_num;
+        }
+        last_chaikins = chaikins_subdivide;
+
+
+
+
+        curr_location = (curr_location + point_change) % pointsArray.length;
+
+
+        //takes integer of curr_location for point reference on curve
+        point_num = (Math.floor(curr_location)) % pointsArray.length;
+
+        //takes fractional of curr_location for amount (deltaxy) inbetweeen points to translate
+        deltax = (pointsArray[(point_num + 1) % pointsArray.length][0] - pointsArray[point_num][0]) * (curr_location % 1);
+        deltay = (pointsArray[(point_num + 1) % pointsArray.length][1] - pointsArray[point_num][1]) * (curr_location % 1);
     }
-    last_chaikins = chaikins_subdivide;
 
-
-
- 
-    curr_location = (curr_location+point_change) % pointsArray.length;
-   
-
-    //takes integer of curr_location for point reference on curve
-
-    point_num = (parseInt(curr_location)) % pointsArray.length;
-
-    //takes fractional of curr_location for amount (deltaxy) inbetweeen points to translate
-    let deltax = (pointsArray[(point_num+1)%pointsArray.length][0] - pointsArray[point_num][0]) * (curr_location%1);
-    console.log(deltax);
-    let deltay = (pointsArray[(point_num+1)%pointsArray.length][1] - pointsArray[point_num][1]) * (curr_location%1);
-    
-    transMatrix = translate(pointsArray[point_num][0] + deltax, pointsArray[point_num][1] +deltay, 0);
+    transMatrix = translate(pointsArray[point_num][0] + deltax, pointsArray[point_num][1] + deltay, 0);
 
 
     gl.uniformMatrix4fv(transMatrixLoc, false, flatten(transMatrix));
@@ -242,7 +250,8 @@ function render() {
 
 
     //calls reqAnimationFrame to update screen every n ms 
-    setTimeout(() => { id = requestAnimationFrame(render); }, 500);
+    if (is_animated)
+        setTimeout(requestAnimationFrame, 30, render);
 
 }
 
@@ -329,34 +338,42 @@ function keys_setup(program) {
         switch (key.toLowerCase()) {
             case 'm':
                 is_mesh = !is_mesh;
-                if (is_mesh) {
+                if (is_mesh)
                     draw_type = gl.LINE_STRIP;
-                } else {
+                else
                     draw_type = gl.TRIANGLES;
-                }
+
                 break;
             case 'q':
-                if (numTimesToSubdivide > 0) {
+                if (numTimesToSubdivide > 0)
                     numTimesToSubdivide -= 1;
-                }
+
                 break;
             case 'e':
-                if (numTimesToSubdivide < 8) {
+                if (numTimesToSubdivide < 8)
                     numTimesToSubdivide += 1;
-                }
+
                 break;
             case 'i':
-                if (chaikins_subdivide < 8) {
+                if (chaikins_subdivide < 8)
                     chaikins_subdivide++;
-                }
+
 
                 break;
             case 'j':
-                if (chaikins_subdivide > 0) {
+                if (chaikins_subdivide > 0)
                     chaikins_subdivide--;
+
+                break;
+            case 'a':
+                is_animated = !is_animated;
+                if (is_animated) {
+                    render();
                 }
                 break;
 
         }
+        if (!is_animated)
+            render();
     }
 }

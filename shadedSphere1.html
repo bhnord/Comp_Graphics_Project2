@@ -18,7 +18,7 @@
     { 
         if(isCircle ==1){
             //if circle, calculate normals etc -- no need if drawing line path
-            vec3 pos = (modelViewMatrix * vPosition).xyz; 
+            vec3 pos = (modelViewMatrix * transMatrix * vPosition).xyz; 
             L = normalize(lightPosition.xyz - pos); 
             N = normalize(modelViewMatrix * vNormal).xyz; 
             V = normalize(-pos); 
